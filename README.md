@@ -1,6 +1,15 @@
 # Wrapping errors
 
-Here are some ways of using the new Go errors wrappers.
+This package has some examples of using custom error types with Go's `xerrors` package.
+Import or copy this package if you want Sentinels.
+Use the examples to build your own application-specific error types and have them work smoothly with `xerrors`.
+
+Everything works the same with Go 1.13 errors.
+`xerrors` is used here so people can use this with older compilers.
+If you are using Go 1.13+, you can use `fmt.Errorf` instead of `xerrors.Errorf`.
+
+The Sentinels are of course based on Dave Cheney's "Constant Time" essay and dotGo 2019 presentation. https://dave.cheney.net/2019/06/10/constant-time
+
 
 ## Sentinels
 
@@ -33,14 +42,14 @@ const ErrBroken = Sentinel("a specific thing broke")
 So you can do this:
 
 ```
-if errors.Is(err, ErrBroken) ...
+if xerrors.Is(err, ErrBroken) ...
 ```
 
 If any error in the chain starting with `err` is an `ErrBroken`, then `Is` will be true.
 
 You don't have to do anything special to use Sentinels in this way.
 
-Your application or package can easily set up lots of sentinels, each of which can be distinguished with `errors.Is`:
+Your application or package can easily set up lots of sentinels, each of which can be distinguished with `xerrors.Is`:
 
 ```
 const (
@@ -55,7 +64,7 @@ The next level of complexity is wrapping an error in a custom type to "tag" an e
 For example, you could have a custom error type that indicates that an error is temporary, or that it was the result of a timeout.
 
 These kinds of error type require a constructor and a couple of methods.
-But when these are written, the new error types fit right into the new techniques.
+But when these are written, the new error types fit right into the xerrors wrapping techniques.
 
 Here is an example of using a new type to indicate temporary errors.
 
@@ -71,12 +80,12 @@ Now we build a constructor:
 
 ```
 func NewTemporary(err error) error {
-    return &TemporaryError{fmt.Errorf("temporary: %w", err)}
+    return &TemporaryError{xerrors.Errorf("temporary: %w", err)}
 }
 ```
-(You have to use `fmt.Errorf` to wrap the `err` because the returned value from `fmt.Errorf` has both `Error` and `Unwrap` methods at the right "level".)
+(You have to use `xerrors.Errorf` to wrap the `err` because the returned value from `xerrors.Errorf` has both `Error` and `Unwrap` methods at the right "level".)
 
-Now we add `Is` and `Unwrap` methods on our new error type so that `errors.Is` and `errors.Unwrap` work right:
+Now we add `Is` and `Unwrap` methods on our new error type so that `xerrors.Is` and `xerrors.Unwrap` work right:
 
 ```
 func (e *TemporaryError) Is(err error) bool {
@@ -85,7 +94,7 @@ func (e *TemporaryError) Is(err error) bool {
 }
 
 func (e *TemporaryError) Unwrap() error {
-	return errors.Unwrap(e.error)
+	return xerrors.Unwrap(e.error)
 }
 ```
 
@@ -93,14 +102,14 @@ Now your new error type is a fully paid up member of the club.
 You can do this to any error chain:
 
 ```
-if errors.Is(err, &TemporaryError{}) ...
+if xerrors.Is(err, &TemporaryError{}) ...
 ```
 
 Or you can write a shortcut:
 
 ```
 func IsTemporary(err error) bool {
-	return errors.Is(err, &TemporaryError{})
+	return xerrors.Is(err, &TemporaryError{})
 }
 ```
 
@@ -129,7 +138,7 @@ Create a constructor:
 ```
 func WithStatusCode(err error, code int) error {
 	return &ErrStatusCode{
-		error:      fmt.Errorf("code %d: %w", code, err),
+		error:      xerrors.Errorf("code %d: %w", code, err),
 		statusCode: code,
 	}
 }
@@ -144,7 +153,7 @@ func (e *ErrStatusCode) Is(err error) bool {
 }
 
 func (e *ErrStatusCode) Unwrap() error {
-	return errors.Unwrap(e.error)
+	return xerrors.Unwrap(e.error)
 }
 ```
 
@@ -161,7 +170,7 @@ Now at the top of your program you can grab an error's status code, if it has on
 ```
 var errStatusCode *ErrStatusCode
 var code int
-if errors.As(err, &errStatusCode) {
+if xerrors.As(err, &errStatusCode) {
     code = errStatusCode.StatusCode()
 }
 ```
@@ -198,7 +207,7 @@ func Chain(printf Printer, err error) {
 	printf("error chain:\n")
 	for err != nil {
 		printf("\t%T %v\n", err, err)
-		err = errors.Unwrap(err)
+		err = xerrors.Unwrap(err)
 	}
 }
 ```
@@ -212,18 +221,18 @@ Chain(fmt.Printf, err)
 ```
 error chain:
     *fmt.wrapError some annotation: code 400: temporary: original error
-    *qerrors.ErrStatusCode code 400: temporary: original error
-    *qerrors.TemporaryError temporary: original error
-    qerrors.Sentinel original error
+    *myapp.ErrStatusCode code 400: temporary: original error
+    *myapp.TemporaryError temporary: original error
+    etype.Sentinel original error
 ```
 
 ## Annotations
 
-With the new `fmt.Errorf`, you can annotate errors without getting complicated, and without losing the benefits of `Is` and `As`, no matter how many annotations are added:
+With the `xerrors.Errorf`, you can annotate errors without getting complicated, and without losing the benefits of `Is` and `As`, no matter how many annotations are added:
 
 ```
 if err != nil {
-    return fmt.Errorf("could get details for user %s: %w", user_id, err)
+    return xerrors.Errorf("could get details for user %s: %w", user_id, err)
 }
 ```
 
